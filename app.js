@@ -4,7 +4,6 @@ const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
-  { name: "待确认", color: "#8c8090" },
   { name: "现货", color: "#41bca5" },
   { name: "预售", color: "#ef6f92" },
 ];
@@ -52,6 +51,7 @@ const elements = {
   noteInput: document.querySelector("#noteInput"),
   resetButton: document.querySelector("#resetButton"),
   saveButton: document.querySelector("#saveButton"),
+  formDeleteButton: document.querySelector("#formDeleteButton"),
   ledgerList: document.querySelector("#ledgerList"),
   monthTotal: document.querySelector("#monthTotal"),
   monthRevenueTotal: document.querySelector("#monthRevenueTotal"),
@@ -145,7 +145,7 @@ function normalizeEntry(entry) {
 }
 
 function normalizeSaleType(value) {
-  return SALE_TYPES.some((item) => item.name === value) ? value : "待确认";
+  return value === "预售" ? "预售" : "现货";
 }
 
 function cleanStoredName(value) {
@@ -336,7 +336,8 @@ function resetForm() {
   elements.accountInput.value = activeAccount;
   elements.quantityInput.value = 1;
   elements.purchaseTimeInput.value = nowLocal();
-  elements.saleTypeInput.value = "待确认";
+  elements.saleTypeInput.value = "现货";
+  elements.formDeleteButton.classList.add("hidden");
   elements.formAccountHint.textContent = `保存到 ${accountName(activeAccount)}`;
   renderStyleSuggestions([]);
   renderStyleReference("");
@@ -1073,7 +1074,7 @@ function extractQuantity(text) {
 function extractSaleType(text) {
   if (/预售|预呈|预定|预购|定金|尾款|预计.{0,16}可发货|可发货通知|到仓后|预约|pre[\s-]?order/i.test(text)) return "预售";
   if (/请尽快.{0,12}手动发货|去发货|立即发货|现货|即发|现货发售/i.test(text)) return "现货";
-  return "待确认";
+  return "现货";
 }
 
 function extractPurchaseTime(text) {
@@ -1409,6 +1410,7 @@ function editEntry(id) {
   saveActiveAccount();
   renderAccountControls();
   elements.saveButton.textContent = "保存修改";
+  elements.formDeleteButton.classList.remove("hidden");
   elements.accountInput.value = activeAccount;
   elements.productNameInput.value = entry.productName || "";
   elements.styleNameInput.value = entry.styleName || "";
@@ -1592,6 +1594,10 @@ elements.clearBatchButton.addEventListener("click", clearBatch);
 elements.parseButton.addEventListener("click", () => parseRecordText(elements.rawText.value));
 elements.productNameInput.addEventListener("input", () => renderStyleSuggestions([], elements.productNameInput.value));
 elements.resetButton.addEventListener("click", resetForm);
+elements.formDeleteButton.addEventListener("click", () => {
+  if (!editingId) return;
+  deleteEntry(editingId);
+});
 elements.entryForm.addEventListener("submit", saveEntry);
 elements.exportButton.addEventListener("click", exportCsv);
 elements.cleanupBadButton.addEventListener("click", cleanupBadEntries);
