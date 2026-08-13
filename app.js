@@ -695,15 +695,35 @@ async function scanImage() {
 
 async function recognizePopmartScreenshot(primaryImageData, colorImageData, onProgress) {
   onProgress?.("正在按固定位置识别", 10);
+  const combinedRegion = await cropCombinedOcrRegion(primaryImageData);
+  if (combinedRegion) {
+    try {
+      const combined = await recognizeImageData(combinedRegion, (message, progress) => {
+        onProgress?.(`${message} · 固定区域`, Math.min(78, 12 + progress * 0.66));
+      });
+      if (hasUsableOcrResult(combined.rawText, combined.parsed)) {
+        return combined;
+      }
+    } catch (error) {
+      console.warn(error);
+      await resetOcrWorker();
+    }
+  }
+
   const regionTexts = [];
   const regions = await cropOcrRegions(primaryImageData);
 
   for (const [index, region] of regions.entries()) {
-    const result = await recognizeImageData(region.imageData, (message, progress) => {
-      onProgress?.(`${message} · 区域 ${index + 1}/${regions.length}`, Math.min(78, 12 + (index * 22) + progress * 0.18));
-    });
-    if (result.rawText) {
-      regionTexts.push(`${region.label}\n${result.rawText}`);
+    try {
+      const result = await recognizeImageData(region.imageData, (message, progress) => {
+        onProgress?.(`${message} · 区域 ${index + 1}/${regions.length}`, Math.min(78, 12 + (index * 16) + progress * 0.14));
+      });
+      if (result.rawText) {
+        regionTexts.push(`${region.label}\n${result.rawText}`);
+      }
+    } catch (error) {
+      console.warn(error);
+      await resetOcrWorker();
     }
   }
 
@@ -748,6 +768,52 @@ function cropOcrRegions(imageData) {
       resolve(regions);
     };
     image.onerror = () => resolve([]);
+    image.src = imageData;
+  });
+}
+
+function cropCombinedOcrRegion(imageData) {
+  const regionDefs = [
+    { label: "状态区域", x: 0.02, y: 0.12, width: 0.96, height: 0.12 },
+    { label: "商品区域", x: 0.22, y: 0.23, width: 0.74, height: 0.18 },
+    { label: "金额区域", x: 0.02, y: 0.38, width: 0.96, height: 0.17 },
+    { label: "时间区域", x: 0.02, y: 0.66, width: 0.92, height: 0.19 },
+  ];
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = 1.7;
+      const labelHeight = 34;
+      const gap = 18;
+      const canvasWidth = Math.round(image.width * 0.96 * scale);
+      const canvasHeight = regionDefs.reduce((sum, region) => sum + labelHeight + Math.round(image.height * region.height * scale) + gap, 0);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, canvasWidth);
+      canvas.height = Math.max(1, canvasHeight);
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "#111111";
+      context.font = "24px system-ui, sans-serif";
+      let targetY = 0;
+
+      regionDefs.forEach((region) => {
+        const sourceX = Math.round(image.width * region.x);
+        const sourceY = Math.round(image.height * region.y);
+        const sourceWidth = Math.round(image.width * region.width);
+        const sourceHeight = Math.round(image.height * region.height);
+        const targetWidth = Math.round(sourceWidth * scale);
+        const targetHeight = Math.round(sourceHeight * scale);
+        context.fillText(region.label, 8, targetY + 25);
+        targetY += labelHeight;
+        context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, targetY, targetWidth, targetHeight);
+        targetY += targetHeight + gap;
+      });
+
+      resolve(canvas.toDataURL("image/jpeg", 0.9));
+    };
+    image.onerror = () => resolve("");
     image.src = imageData;
   });
 }
