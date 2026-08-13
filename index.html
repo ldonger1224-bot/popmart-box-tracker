@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f3ee" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="抽盒机" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>抽盒机记录器</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <label class="account-switcher" aria-label="当前账号">
+          <span>账号</span>
+          <select id="activeAccountSelect"></select>
+        </label>
+        <div class="header-title">
+          <strong>抽盒机</strong>
+          <span id="headerHint">上传识别入库</span>
+        </div>
+        <button class="icon-action hidden" type="button" id="installButton" aria-label="安装到手机桌面">↓</button>
+      </header>
+
+      <section class="summary-strip" aria-label="当前账号汇总">
+        <div>
+          <span id="spendLabel">库存成本</span>
+          <strong id="monthTotal">¥0.00</strong>
+        </div>
+        <div>
+          <span>本月营收</span>
+          <strong id="monthRevenueTotal">¥0.00</strong>
+        </div>
+        <div>
+          <span>库存件数</span>
+          <strong id="entryCount">0</strong>
+        </div>
+      </section>
+
+      <section class="tab-panel active" id="tabCapture" data-tab-panel="capture" aria-label="上传图片识别入库">
+        <section class="upload-zone" id="dropZone">
+          <input id="imageInput" type="file" accept="image/*" multiple />
+          <div class="upload-empty" id="uploadEmpty">
+            <div class="receipt-visual" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <b></b>
+            </div>
+            <h1>上传抽盒机截图</h1>
+            <p>可一次选择多张截图。为了手机稳定，建议每次 6 张以内。</p>
+            <button class="primary-action" type="button" id="selectButton">选择图片</button>
+          </div>
+          <div class="preview-wrap hidden" id="previewWrap">
+            <img id="previewImage" alt="商品图片预览" />
+            <div class="preview-actions">
+              <button type="button" id="replaceButton">更换</button>
+              <button type="button" id="scanButton">识别图片</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="batch-card hidden" id="batchPanel">
+          <div class="section-head">
+            <div>
+              <h2>批量入库</h2>
+              <p id="batchHint">已选择 0 张截图</p>
+            </div>
+            <button type="button" class="ghost-action" id="clearBatchButton">清空</button>
+          </div>
+          <div class="batch-list" id="batchList"></div>
+          <button class="save-action" type="button" id="batchScanButton">批量识别并保存</button>
+        </section>
+
+        <section class="scan-card">
+          <div class="scan-state">
+            <span class="status-dot" id="statusDot"></span>
+            <p id="scanStatus">离线 OCR 已就绪</p>
+          </div>
+          <div class="progress" aria-hidden="true">
+            <span id="progressBar"></span>
+          </div>
+          <label for="rawText">截图文字</label>
+          <textarea id="rawText" rows="5" placeholder="OCR 结果会显示在这里，也可以粘贴截图文字。"></textarea>
+          <button class="secondary-action" type="button" id="parseButton">从文本提取</button>
+        </section>
+
+        <form class="entry-form" id="entryForm">
+          <div class="section-head">
+            <div>
+              <h2>入库校对</h2>
+              <p id="formAccountHint">保存到当前账号</p>
+            </div>
+            <button type="button" class="ghost-action" id="resetButton">清空</button>
+          </div>
+
+          <label class="hidden">
+            账号
+            <select id="accountInput"></select>
+          </label>
+
+          <label>
+            商品名称
+            <input id="productNameInput" type="text" placeholder="例如 CHAKA 一针一线系列手办" required />
+          </label>
+
+          <label>
+            款式
+            <input id="styleNameInput" type="text" placeholder="例如 穿针引线" />
+          </label>
+          <div class="style-suggestions hidden" id="styleSuggestions" aria-label="款式候选"></div>
+          <div class="style-reference hidden" id="styleReference">
+            <span>截图款式区域</span>
+            <img id="styleReferenceImage" alt="截图款式区域放大图" />
+          </div>
+
+          <div class="field-row">
+            <label>
+              数量
+              <input id="quantityInput" type="number" min="1" step="1" value="1" required />
+            </label>
+            <label>
+              买入价格
+              <input id="priceInput" type="number" min="0" step="0.01" placeholder="0.00" required />
+            </label>
+          </div>
+
+          <div class="field-row">
+            <label>
+              购买时间
+              <input id="purchaseTimeInput" type="datetime-local" required />
+            </label>
+            <label>
+              状态
+              <select id="saleTypeInput">
+                <option>待确认</option>
+                <option>现货</option>
+                <option>预售</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="field-row">
+            <label>
+              卖出价格
+              <input id="salePriceInput" type="number" min="0" step="0.01" placeholder="未卖出" />
+            </label>
+            <label>
+              卖出时间
+              <input id="saleTimeInput" type="datetime-local" />
+            </label>
+          </div>
+
+          <label>
+            备注
+            <textarea id="noteInput" rows="3" placeholder="订单号、隐藏款、发货说明等"></textarea>
+          </label>
+
+          <button class="save-action" type="submit" id="saveButton">保存入库</button>
+        </form>
+      </section>
+
+      <section class="tab-panel" id="tabInventory" data-tab-panel="inventory" aria-label="资产库存">
+        <div class="section-head">
+          <div>
+            <h2>资产库存</h2>
+            <p id="inventoryHint">当前账号库存会自动合并同款</p>
+          </div>
+          <select id="statusFilter" aria-label="库存状态筛选">
+            <option value="">全部状态</option>
+            <option>待确认</option>
+            <option>现货</option>
+            <option>预售</option>
+          </select>
+        </div>
+        <div class="state-pills" id="statePills"></div>
+        <div class="stock-list" id="stockList"></div>
+        <section class="ledger-panel" aria-label="当前账号记录列表">
+          <div class="section-head">
+            <div>
+              <h2>记录明细</h2>
+              <p id="ledgerHint">点击编辑可修改买入或卖出信息</p>
+            </div>
+          </div>
+          <div class="ledger-list" id="ledgerList"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tabStats" data-tab-panel="stats" aria-label="收益统计">
+        <div class="stats-grid">
+          <article>
+            <span>本月卖出</span>
+            <strong id="statsRevenue">¥0.00</strong>
+          </article>
+          <article>
+            <span>本月利润</span>
+            <strong id="statsProfit">¥0.00</strong>
+          </article>
+          <article>
+            <span>已售件数</span>
+            <strong id="statsSoldCount">0</strong>
+          </article>
+        </div>
+        <section class="ledger-panel">
+          <div class="section-head">
+            <div>
+              <h2>本月卖出</h2>
+              <p>按卖出时间统计当前账号</p>
+            </div>
+          </div>
+          <div class="ledger-list" id="soldList"></div>
+        </section>
+        <section class="ledger-panel">
+          <div class="section-head">
+            <div>
+              <h2>所有账号汇总</h2>
+              <p>合计库存、成本、营收和利润</p>
+            </div>
+          </div>
+          <div class="account-summary-list" id="allAccountSummary"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tabSettings" data-tab-panel="settings" aria-label="设置">
+        <details class="settings-card">
+          <summary>
+            <span>账号名称</span>
+            <small>编辑 6 个账号</small>
+          </summary>
+          <div class="account-name-grid" id="accountNameGrid"></div>
+        </details>
+        <section class="settings-card">
+          <div class="section-head">
+            <div>
+              <h2>数据</h2>
+              <p>导出后可以用表格查看</p>
+            </div>
+          </div>
+          <button type="button" class="secondary-action" id="exportButton">导出 CSV</button>
+          <button type="button" class="danger-action" id="cleanupBadButton">清理错误识别记录</button>
+        </section>
+      </section>
+
+      <select class="hidden" id="accountFilter" aria-hidden="true"></select>
+      <div class="hidden" id="accountProductsGrid"></div>
+
+      <nav class="tabbar" aria-label="任务栏">
+        <button class="active" type="button" data-tab="capture">
+          <span>＋</span>
+          入库
+        </button>
+        <button type="button" data-tab="inventory">
+          <span>▦</span>
+          库存
+        </button>
+        <button type="button" data-tab="stats">
+          <span>¥</span>
+          收益
+        </button>
+        <button type="button" data-tab="settings">
+          <span>⚙</span>
+          设置
+        </button>
+      </nav>
+    </main>
+
+    <script src="vendor/tesseract/tesseract.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
