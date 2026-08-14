@@ -178,11 +178,6 @@
           </select>
         </div>
         <div class="state-pills" id="statePills"></div>
-        <section class="stock-search-panel" aria-label="按款式搜索库存">
-          <label for="stockSearchInput">搜索款式</label>
-          <input id="stockSearchInput" type="search" placeholder="输入款式名，查在哪个账号" autocomplete="off" />
-          <div class="stock-search-results hidden" id="stockSearchResults"></div>
-        </section>
         <div class="stock-list" id="stockList"></div>
         <section class="ledger-panel" aria-label="当前账号记录列表">
           <div class="section-head">
@@ -238,6 +233,17 @@
           </summary>
           <div class="account-name-grid" id="accountNameGrid"></div>
         </details>
+        <section class="settings-card stock-search-panel" aria-label="按款式搜索库存">
+          <div class="section-head">
+            <div>
+              <h2>搜索款式</h2>
+              <p>查询款式在哪个账号</p>
+            </div>
+          </div>
+          <label for="stockSearchInput">款式名</label>
+          <input id="stockSearchInput" type="search" placeholder="输入款式名" autocomplete="off" />
+          <div class="stock-search-results hidden" id="stockSearchResults"></div>
+        </section>
         <section class="settings-card">
           <div class="section-head">
             <div>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "box-machine-offline-v38";
+const CACHE_NAME = "box-machine-offline-v39";
 const OFFLINE_FILES = [
   "./",
   "./index.html",
