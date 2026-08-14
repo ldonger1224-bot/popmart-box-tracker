@@ -531,6 +531,46 @@ textarea:focus {
   gap: 10px;
 }
 
+.stock-search-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.stock-search-panel label {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.stock-search-results {
+  display: grid;
+  gap: 8px;
+}
+
+.search-result-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 253, 249, 0.82);
+}
+
+.search-result-card div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-result-card span,
+.search-result-card p,
+.search-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .style-suggestions {
   display: flex;
   flex-wrap: wrap;

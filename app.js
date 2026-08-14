@@ -63,6 +63,8 @@ const elements = {
   accountProductsGrid: document.querySelector("#accountProductsGrid"),
   statusFilter: document.querySelector("#statusFilter"),
   statePills: document.querySelector("#statePills"),
+  stockSearchInput: document.querySelector("#stockSearchInput"),
+  stockSearchResults: document.querySelector("#stockSearchResults"),
   stockList: document.querySelector("#stockList"),
   soldList: document.querySelector("#soldList"),
   allAccountSummary: document.querySelector("#allAccountSummary"),
@@ -280,6 +282,11 @@ function accountId(index) {
 function accountName(id) {
   const index = Number(String(id || "").replace("account-", "")) - 1;
   return accountNames[index] || accountNames[0];
+}
+
+function accountIndex(id) {
+  const index = Number(String(id || "").replace("account-", "")) - 1;
+  return Number.isFinite(index) ? index : 0;
 }
 
 function renderAccountControls() {
@@ -1220,6 +1227,7 @@ function renderLedger() {
   elements.monthRevenueTotal.textContent = formatMoney(monthRevenue);
   elements.entryCount.textContent = String(stockTotal);
   renderStatePills(visibleEntries);
+  renderStockSearch();
   renderStockList(visibleEntries);
   renderStats(accountEntries);
   renderAllAccountSummary();
@@ -1275,6 +1283,53 @@ function renderAccountProducts() {
     `;
     elements.accountProductsGrid.append(card);
   });
+}
+
+function renderStockSearch() {
+  const query = normalizeStockKey(elements.stockSearchInput.value);
+  elements.stockSearchResults.innerHTML = "";
+  elements.stockSearchResults.classList.toggle("hidden", !query);
+  if (!query) return;
+
+  const matchedEntries = validStockEntries(entries).filter((entry) => {
+    const haystack = normalizeStockKey(`${entry.styleName || ""}${entry.productName || ""}`);
+    return haystack.includes(query);
+  });
+  const stockItems = aggregateStock(matchedEntries);
+
+  if (!stockItems.length) {
+    elements.stockSearchResults.innerHTML = `<p class="search-empty">没有找到这个款式。</p>`;
+    return;
+  }
+
+  const grouped = new Map();
+  stockItems.forEach((item) => {
+    const ids = item.accountIds?.length ? item.accountIds : [item.accountId || accountId(0)];
+    ids.forEach((id) => {
+      if (!grouped.has(id)) {
+        grouped.set(id, { accountId: id, stock: 0, cost: 0, items: [] });
+      }
+      const group = grouped.get(id);
+      const stock = item.accountStock?.[id] || item.stock;
+      const cost = item.accountCost?.[id] || item.cost;
+      group.stock += stock;
+      group.cost += cost;
+      group.items.push({ ...item, stock, cost });
+    });
+  });
+
+  elements.stockSearchResults.innerHTML = [...grouped.values()]
+    .sort((a, b) => accountIndex(a.accountId) - accountIndex(b.accountId))
+    .map((group) => `
+      <article class="search-result-card">
+        <div>
+          <strong>${escapeHtml(accountName(group.accountId))}</strong>
+          <span>${group.stock} 件 · 成本 ${formatMoney(group.cost)}</span>
+        </div>
+        <p>${group.items.map((item) => `${escapeHtml(item.name)} ×${item.stock}`).join("、")}</p>
+      </article>
+    `)
+    .join("");
 }
 
 function renderStockList(sourceEntries) {
@@ -1418,6 +1473,9 @@ function aggregateStock(sourceEntries) {
     if (existing) {
       existing.stock += stock;
       existing.cost += Number(entry.price || 0);
+      existing.accountStock[entry.accountId || accountId(0)] = (existing.accountStock[entry.accountId || accountId(0)] || 0) + stock;
+      existing.accountCost[entry.accountId || accountId(0)] = (existing.accountCost[entry.accountId || accountId(0)] || 0) + Number(entry.price || 0);
+      if (!existing.accountIds.includes(entry.accountId || accountId(0))) existing.accountIds.push(entry.accountId || accountId(0));
       if (new Date(entry.purchaseTime) > new Date(existing.lastTime)) {
         existing.image = entry.productImage || entry.image || existing.image;
         existing.lastTime = entry.purchaseTime || existing.lastTime;
@@ -1434,6 +1492,10 @@ function aggregateStock(sourceEntries) {
         lastTime: entry.purchaseTime || "",
         latestId: entry.id,
         saleType,
+        accountId: entry.accountId || accountId(0),
+        accountIds: [entry.accountId || accountId(0)],
+        accountStock: { [entry.accountId || accountId(0)]: stock },
+        accountCost: { [entry.accountId || accountId(0)]: Number(entry.price || 0) },
       });
     }
   });
@@ -1683,6 +1745,7 @@ elements.accountFilter.addEventListener("change", () => {
   renderLedger();
 });
 elements.statusFilter.addEventListener("change", renderLedger);
+elements.stockSearchInput.addEventListener("input", renderStockSearch);
 
 elements.ledgerList.addEventListener("click", (event) => {
   const deleteButton = event.target.closest("[data-delete-id]");
