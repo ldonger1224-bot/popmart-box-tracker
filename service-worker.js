@@ -1,7 +1,8 @@
-const CACHE_NAME = "box-machine-offline-v39";
+const CACHE_NAME = "box-machine-offline-v40";
 const OFFLINE_FILES = [
   "./",
   "./index.html",
+  "./update.html",
   "./styles.css",
   "./app.js",
   "./vendor/tesseract/tesseract.min.js",
