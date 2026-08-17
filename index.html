@@ -254,14 +254,24 @@
         <section class="settings-card">
           <div class="section-head">
             <div>
-              <h2>数据</h2>
-              <p>导出后可以用表格查看</p>
+              <h2>数据安全</h2>
+              <p>先备份，再恢复或换手机</p>
             </div>
           </div>
-          <button type="button" class="secondary-action" id="exportButton">导出 CSV</button>
-          <button type="button" class="secondary-action" id="backupButton">备份全部数据</button>
-          <button type="button" class="secondary-action" id="importDataButton">恢复/导入数据</button>
+          <div class="settings-actions">
+            <button type="button" class="secondary-action" id="backupButton">备份全部数据</button>
+            <button type="button" class="secondary-action" id="importDataButton">恢复/导入数据</button>
+            <button type="button" class="secondary-action" id="exportButton">导出 CSV</button>
+          </div>
           <input class="hidden" id="importDataInput" type="file" accept=".json,.csv,text/csv,application/json" />
+        </section>
+        <section class="settings-card">
+          <div class="section-head">
+            <div>
+              <h2>程序维护</h2>
+              <p>更新页面文件，不会删除库存</p>
+            </div>
+          </div>
           <button type="button" class="secondary-action" id="refreshAppButton">更新程序缓存</button>
           <button type="button" class="danger-action" id="cleanupBadButton">清理错误识别记录</button>
           <p class="version-line" id="versionText"></p>
@@ -270,6 +280,34 @@
 
       <select class="hidden" id="accountFilter" aria-hidden="true"></select>
       <div class="hidden" id="accountProductsGrid"></div>
+
+      <div class="sheet-backdrop hidden" id="sellSheet" aria-hidden="true">
+        <section class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="sellSheetTitle">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <div class="section-head">
+            <div>
+              <h2 id="sellSheetTitle">卖出库存</h2>
+              <p id="sellSheetMeta">当前账号库存</p>
+            </div>
+            <button type="button" class="mini-action" id="sellCancelButton">取消</button>
+          </div>
+          <div class="field-row">
+            <label>
+              卖出数量
+              <input id="sellQuantityInput" type="number" min="1" step="1" value="1" />
+            </label>
+            <label>
+              单件卖出价
+              <input id="sellUnitPriceInput" type="number" min="0" step="0.01" placeholder="0.00" />
+            </label>
+          </div>
+          <label>
+            卖出时间
+            <input id="sellTimeInput" type="datetime-local" />
+          </label>
+          <button type="button" class="save-action" id="sellConfirmButton">确认卖出</button>
+        </section>
+      </div>
 
       <nav class="tabbar" aria-label="任务栏">
         <button class="active" type="button" data-tab="capture">

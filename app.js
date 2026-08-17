@@ -2,7 +2,7 @@ const STORAGE_KEY = "box-machine-records";
 const ACCOUNTS_KEY = "box-machine-account-names";
 const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
-const APP_VERSION = "v41";
+const APP_VERSION = "v42";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
   { name: "现货", color: "#41bca5" },
@@ -78,6 +78,14 @@ const elements = {
   statsRevenue: document.querySelector("#statsRevenue"),
   statsProfit: document.querySelector("#statsProfit"),
   statsSoldCount: document.querySelector("#statsSoldCount"),
+  sellSheet: document.querySelector("#sellSheet"),
+  sellSheetTitle: document.querySelector("#sellSheetTitle"),
+  sellSheetMeta: document.querySelector("#sellSheetMeta"),
+  sellQuantityInput: document.querySelector("#sellQuantityInput"),
+  sellUnitPriceInput: document.querySelector("#sellUnitPriceInput"),
+  sellTimeInput: document.querySelector("#sellTimeInput"),
+  sellCancelButton: document.querySelector("#sellCancelButton"),
+  sellConfirmButton: document.querySelector("#sellConfirmButton"),
   tabButtons: document.querySelectorAll("[data-tab]"),
   tabPanels: document.querySelectorAll("[data-tab-panel]"),
 };
@@ -96,6 +104,7 @@ let batchFiles = [];
 let scanRunId = 0;
 let ocrWorkerPromise = null;
 let currentOcrProgress = null;
+let sellingStockKey = "";
 
 function formatMoney(value) {
   return `¥${Number(value || 0).toFixed(2)}`;
@@ -1403,8 +1412,8 @@ function renderStockList(sourceEntries) {
         </div>
       </div>
       <div class="stock-actions">
+        <button type="button" class="mini-action sold" data-sell-stock-key="${escapeHtml(item.key)}">卖出</button>
         <button type="button" class="mini-action" data-edit-id="${item.latestId}">编辑</button>
-        <button type="button" class="mini-action sold" data-sell-stock-key="${escapeHtml(item.key)}">批量卖出</button>
       </div>
     `;
     elements.stockList.append(card);
@@ -1582,12 +1591,16 @@ function stockGroupKey(entry) {
   return styleKey ? `${saleType}::style::${styleKey}` : `${saleType}::product::${productKey}`;
 }
 
-function sellStockGroup(stockKey) {
-  const candidates = validStockEntries(entries)
+function stockSellCandidates(stockKey) {
+  return validStockEntries(entries)
     .filter((entry) => (entry.accountId || accountId(0)) === activeAccount)
     .filter((entry) => stockGroupKey(entry) === stockKey)
     .filter((entry) => Number(entry.salePrice || 0) <= 0)
     .sort((a, b) => new Date(a.purchaseTime) - new Date(b.purchaseTime));
+}
+
+function openSellSheet(stockKey) {
+  const candidates = stockSellCandidates(stockKey);
   const stock = candidates.reduce((sum, entry) => sum + safeQuantity(entry.quantity), 0);
   if (!stock) {
     setStatus("这个款式当前没有可卖库存", "warn", 0);
@@ -1595,23 +1608,44 @@ function sellStockGroup(stockKey) {
   }
 
   const name = candidates[0].styleName || candidates[0].productName || "这个款式";
-  const quantityText = window.prompt(`卖出「${name}」几件？当前库存 ${stock} 件`, "1");
-  if (quantityText === null) return;
-  const quantity = positiveInteger(quantityText);
+  const cost = candidates.reduce((sum, entry) => sum + Number(entry.price || 0), 0);
+  sellingStockKey = stockKey;
+  elements.sellSheetTitle.textContent = `卖出「${name}」`;
+  elements.sellSheetMeta.textContent = `${accountName(activeAccount)} · 当前 ${stock} 件 · 成本 ${formatMoney(cost)}`;
+  elements.sellQuantityInput.max = String(stock);
+  elements.sellQuantityInput.value = "1";
+  elements.sellUnitPriceInput.value = "";
+  elements.sellTimeInput.value = nowLocal();
+  elements.sellSheet.classList.remove("hidden");
+  elements.sellSheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("sheet-open");
+  window.setTimeout(() => elements.sellUnitPriceInput.focus(), 80);
+}
+
+function closeSellSheet() {
+  sellingStockKey = "";
+  elements.sellSheet.classList.add("hidden");
+  elements.sellSheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("sheet-open");
+}
+
+function confirmSellStockGroup() {
+  if (!sellingStockKey) return;
+  const candidates = stockSellCandidates(sellingStockKey);
+  const stock = candidates.reduce((sum, entry) => sum + safeQuantity(entry.quantity), 0);
+  const name = candidates[0]?.styleName || candidates[0]?.productName || "这个款式";
+  const quantity = positiveInteger(elements.sellQuantityInput.value);
   if (!quantity || quantity > stock) {
     setStatus("卖出数量不能超过当前库存", "warn", 0);
     return;
   }
-  const unitPriceText = window.prompt("单件卖出价是多少？", "");
-  if (unitPriceText === null) return;
-  const unitPrice = Number(unitPriceText);
+  const unitPrice = Number(elements.sellUnitPriceInput.value);
   if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
     setStatus("请填写正确的卖出价格", "warn", 0);
+    elements.sellUnitPriceInput.focus();
     return;
   }
-  const saleTimeText = window.prompt("卖出时间", nowLocal());
-  if (saleTimeText === null) return;
-  const saleTime = normalizeImportedTime(saleTimeText) || nowLocal();
+  const saleTime = normalizeImportedTime(elements.sellTimeInput.value) || nowLocal();
 
   let remaining = quantity;
   const candidateIds = new Set(candidates.map((entry) => entry.id));
@@ -1647,6 +1681,7 @@ function sellStockGroup(stockKey) {
 
   saveEntries();
   renderLedger();
+  closeSellSheet();
   setStatus(`已卖出 ${quantity} 件「${name}」`, "active", 100);
 }
 
@@ -2077,7 +2112,7 @@ elements.ledgerList.addEventListener("click", (event) => {
 elements.stockList.addEventListener("click", (event) => {
   const sellButton = event.target.closest("[data-sell-stock-key]");
   if (sellButton) {
-    sellStockGroup(sellButton.dataset.sellStockKey);
+    openSellSheet(sellButton.dataset.sellStockKey);
     return;
   }
   const button = event.target.closest("[data-edit-id]");
@@ -2103,6 +2138,17 @@ elements.accountProductsGrid.addEventListener("click", (event) => {
 
 elements.tabButtons.forEach((button) => {
   button.addEventListener("click", () => switchTab(button.dataset.tab));
+});
+
+elements.sellCancelButton.addEventListener("click", closeSellSheet);
+elements.sellConfirmButton.addEventListener("click", confirmSellStockGroup);
+elements.sellSheet.addEventListener("click", (event) => {
+  if (event.target === elements.sellSheet) closeSellSheet();
+});
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements.sellSheet.classList.contains("hidden")) {
+    closeSellSheet();
+  }
 });
 
 window.addEventListener("beforeinstallprompt", (event) => {
