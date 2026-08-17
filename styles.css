@@ -574,6 +574,29 @@ textarea:focus {
   background: rgba(46, 184, 158, 0.08);
 }
 
+.generated-total {
+  min-height: 54px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(46, 184, 158, 0.22);
+  border-radius: 8px;
+  background: rgba(46, 184, 158, 0.1);
+}
+
+.generated-total span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.generated-total strong {
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
 .stock-search-panel {
   display: grid;
   gap: 8px;
@@ -916,6 +939,11 @@ textarea:focus {
 .mini-action.sold {
   background: linear-gradient(135deg, var(--mint), #1a8f7b);
   color: #fff;
+}
+
+.mini-action.add-stock {
+  background: rgba(239, 111, 146, 0.13);
+  color: var(--rose-dark);
 }
 
 .mini-action.arrival {

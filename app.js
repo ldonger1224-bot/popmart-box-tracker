@@ -3,7 +3,7 @@ const ACCOUNTS_KEY = "box-machine-account-names";
 const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
 const BACKUP_META_KEY = "box-machine-backup-meta";
-const APP_VERSION = "v43";
+const APP_VERSION = "v44";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
   { name: "现货", color: "#41bca5" },
@@ -96,6 +96,16 @@ const elements = {
   sellTimeInput: document.querySelector("#sellTimeInput"),
   sellCancelButton: document.querySelector("#sellCancelButton"),
   sellConfirmButton: document.querySelector("#sellConfirmButton"),
+  addStockSheet: document.querySelector("#addStockSheet"),
+  addStockTitle: document.querySelector("#addStockTitle"),
+  addStockMeta: document.querySelector("#addStockMeta"),
+  addStockQuantityInput: document.querySelector("#addStockQuantityInput"),
+  addStockUnitPriceInput: document.querySelector("#addStockUnitPriceInput"),
+  addStockTotal: document.querySelector("#addStockTotal"),
+  addStockTimeInput: document.querySelector("#addStockTimeInput"),
+  addStockSaleTypeInput: document.querySelector("#addStockSaleTypeInput"),
+  addStockCancelButton: document.querySelector("#addStockCancelButton"),
+  addStockConfirmButton: document.querySelector("#addStockConfirmButton"),
   tabButtons: document.querySelectorAll("[data-tab]"),
   tabPanels: document.querySelectorAll("[data-tab-panel]"),
 };
@@ -115,6 +125,7 @@ let scanRunId = 0;
 let ocrWorkerPromise = null;
 let currentOcrProgress = null;
 let sellingStockKey = "";
+let addingStockKey = "";
 let expandedStockKeys = new Set();
 let showSoldHistory = false;
 
@@ -1431,6 +1442,7 @@ function renderStockList(sourceEntries) {
         </div>
       </div>
       <div class="stock-actions">
+        <button type="button" class="mini-action add-stock" data-add-stock-key="${escapeHtml(item.key)}">加库存</button>
         <button type="button" class="mini-action sold" data-sell-stock-key="${escapeHtml(item.key)}">卖出</button>
         ${normalizeSaleType(item.saleType) === "预售" ? `<button type="button" class="mini-action arrival" data-arrive-stock-key="${escapeHtml(item.key)}">到货</button>` : ""}
         <button type="button" class="mini-action" data-edit-id="${item.latestId}">编辑</button>
@@ -1719,6 +1731,104 @@ function stockSellCandidates(stockKey) {
     .filter((entry) => stockGroupKey(entry) === stockKey)
     .filter((entry) => Number(entry.salePrice || 0) <= 0)
     .sort((a, b) => new Date(a.purchaseTime) - new Date(b.purchaseTime));
+}
+
+function stockTemplateEntries(stockKey) {
+  return validStockEntries(entries)
+    .filter((entry) => (entry.accountId || accountId(0)) === activeAccount)
+    .filter((entry) => stockGroupKey(entry) === stockKey)
+    .sort((a, b) => new Date(b.purchaseTime) - new Date(a.purchaseTime));
+}
+
+function openAddStockSheet(stockKey) {
+  const templates = stockTemplateEntries(stockKey);
+  if (!templates.length) {
+    setStatus("没有找到可复制的款式记录", "warn", 0);
+    return;
+  }
+
+  const latest = templates[0];
+  const unsold = templates.filter((entry) => Number(entry.salePrice || 0) <= 0);
+  const stockQuantity = unsold.reduce((sum, entry) => sum + safeQuantity(entry.quantity), 0);
+  const stockCost = unsold.reduce((sum, entry) => sum + Number(entry.price || 0), 0);
+  const fallbackUnitPrice = Number(latest.price || 0) / safeQuantity(latest.quantity);
+  const unitPrice = stockQuantity > 0 ? stockCost / stockQuantity : fallbackUnitPrice;
+
+  addingStockKey = stockKey;
+  elements.addStockTitle.textContent = `加「${latest.styleName || latest.productName || "这个款式"}」`;
+  elements.addStockMeta.textContent = `${accountName(activeAccount)} · 自动复制商品图和款式`;
+  elements.addStockQuantityInput.value = "1";
+  elements.addStockUnitPriceInput.value = Number.isFinite(unitPrice) && unitPrice > 0 ? roundMoney(unitPrice).toFixed(2) : "";
+  elements.addStockTimeInput.value = nowLocal();
+  elements.addStockSaleTypeInput.value = normalizeSaleType(latest.saleType);
+  updateAddStockTotal();
+  elements.addStockSheet.classList.remove("hidden");
+  elements.addStockSheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("sheet-open");
+  window.setTimeout(() => elements.addStockQuantityInput.focus(), 80);
+}
+
+function closeAddStockSheet() {
+  addingStockKey = "";
+  elements.addStockSheet.classList.add("hidden");
+  elements.addStockSheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("sheet-open");
+}
+
+function updateAddStockTotal() {
+  const quantity = positiveInteger(elements.addStockQuantityInput.value);
+  const unitPrice = Number(elements.addStockUnitPriceInput.value);
+  const total = quantity && Number.isFinite(unitPrice) && unitPrice > 0 ? roundMoney(quantity * unitPrice) : 0;
+  elements.addStockTotal.textContent = formatMoney(total);
+}
+
+function confirmAddStock() {
+  if (!addingStockKey) return;
+  const templates = stockTemplateEntries(addingStockKey);
+  const latest = templates[0];
+  if (!latest) {
+    closeAddStockSheet();
+    setStatus("没有找到可复制的款式记录", "warn", 0);
+    return;
+  }
+
+  const quantity = positiveInteger(elements.addStockQuantityInput.value);
+  const unitPrice = Number(elements.addStockUnitPriceInput.value);
+  if (!quantity) {
+    setStatus("请填写正确的新增数量", "warn", 0);
+    elements.addStockQuantityInput.focus();
+    return;
+  }
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+    setStatus("请填写正确的买入单价", "warn", 0);
+    elements.addStockUnitPriceInput.focus();
+    return;
+  }
+
+  const entry = {
+    ...latest,
+    id: crypto.randomUUID(),
+    accountId: activeAccount,
+    quantity,
+    quantitySource: "manual",
+    price: roundMoney(quantity * unitPrice),
+    purchaseTime: normalizeImportedTime(elements.addStockTimeInput.value) || nowLocal(),
+    saleType: normalizeSaleType(elements.addStockSaleTypeInput.value),
+    salePrice: 0,
+    saleTime: "",
+    note: "",
+    image: "",
+    rawText: "",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  entries.push(entry);
+  rememberStyle(entry.productName, entry.styleName);
+  saveEntries();
+  renderLedger();
+  closeAddStockSheet();
+  setStatus(`已新增 ${quantity} 件「${entry.styleName || entry.productName || "库存"}」`, "active", 100);
 }
 
 function openSellSheet(stockKey) {
@@ -2342,6 +2452,11 @@ elements.ledgerList.addEventListener("click", (event) => {
 });
 
 elements.stockList.addEventListener("click", (event) => {
+  const addButton = event.target.closest("[data-add-stock-key]");
+  if (addButton) {
+    openAddStockSheet(addButton.dataset.addStockKey);
+    return;
+  }
   const sellButton = event.target.closest("[data-sell-stock-key]");
   if (sellButton) {
     openSellSheet(sellButton.dataset.sellStockKey);
@@ -2406,9 +2521,19 @@ elements.sellSplitPricesInput.addEventListener("change", renderSellPriceLines);
 elements.sellSheet.addEventListener("click", (event) => {
   if (event.target === elements.sellSheet) closeSellSheet();
 });
+elements.addStockCancelButton.addEventListener("click", closeAddStockSheet);
+elements.addStockConfirmButton.addEventListener("click", confirmAddStock);
+elements.addStockQuantityInput.addEventListener("input", updateAddStockTotal);
+elements.addStockUnitPriceInput.addEventListener("input", updateAddStockTotal);
+elements.addStockSheet.addEventListener("click", (event) => {
+  if (event.target === elements.addStockSheet) closeAddStockSheet();
+});
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !elements.sellSheet.classList.contains("hidden")) {
     closeSellSheet();
+  }
+  if (event.key === "Escape" && !elements.addStockSheet.classList.contains("hidden")) {
+    closeAddStockSheet();
   }
 });
 

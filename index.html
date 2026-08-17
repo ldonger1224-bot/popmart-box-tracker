@@ -339,6 +339,47 @@
         </section>
       </div>
 
+      <div class="sheet-backdrop hidden" id="addStockSheet" aria-hidden="true">
+        <section class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="addStockTitle">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <div class="section-head">
+            <div>
+              <h2 id="addStockTitle">加库存</h2>
+              <p id="addStockMeta">复制当前款式入库</p>
+            </div>
+            <button type="button" class="mini-action" id="addStockCancelButton">取消</button>
+          </div>
+          <div class="field-row">
+            <label>
+              新增数量
+              <input id="addStockQuantityInput" type="number" min="1" step="1" value="1" />
+            </label>
+            <label>
+              单件买入价
+              <input id="addStockUnitPriceInput" type="number" min="0" step="0.01" placeholder="0.00" />
+            </label>
+          </div>
+          <div class="generated-total">
+            <span>生成买入总价</span>
+            <strong id="addStockTotal">¥0.00</strong>
+          </div>
+          <div class="field-row">
+            <label>
+              购买时间
+              <input id="addStockTimeInput" type="datetime-local" />
+            </label>
+            <label>
+              状态
+              <select id="addStockSaleTypeInput">
+                <option>现货</option>
+                <option>预售</option>
+              </select>
+            </label>
+          </div>
+          <button type="button" class="save-action" id="addStockConfirmButton">确认加库存</button>
+        </section>
+      </div>
+
       <nav class="tabbar" aria-label="任务栏">
         <button class="active" type="button" data-tab="capture">
           <span>＋</span>
