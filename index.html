@@ -191,13 +191,20 @@
       </section>
 
       <section class="tab-panel" id="tabStats" data-tab-panel="stats" aria-label="收益统计">
+        <div class="section-head">
+          <div>
+            <h2>收益统计</h2>
+            <p>按卖出时间统计</p>
+          </div>
+          <input id="statsMonthInput" type="month" aria-label="收益月份" />
+        </div>
         <div class="stats-grid">
           <article>
-            <span>本月卖出</span>
+            <span>卖出金额</span>
             <strong id="statsRevenue">¥0.00</strong>
           </article>
           <article>
-            <span>本月利润</span>
+            <span>利润</span>
             <strong id="statsProfit">¥0.00</strong>
           </article>
           <article>
@@ -208,8 +215,8 @@
         <section class="ledger-panel">
           <div class="section-head">
             <div>
-              <h2>本月卖出</h2>
-              <p>按卖出时间统计当前账号</p>
+              <h2>卖出记录</h2>
+              <p>当前账号的月份明细</p>
             </div>
           </div>
           <div class="ledger-list" id="soldList"></div>
@@ -252,7 +259,12 @@
             </div>
           </div>
           <button type="button" class="secondary-action" id="exportButton">导出 CSV</button>
+          <button type="button" class="secondary-action" id="backupButton">备份全部数据</button>
+          <button type="button" class="secondary-action" id="importDataButton">恢复/导入数据</button>
+          <input class="hidden" id="importDataInput" type="file" accept=".json,.csv,text/csv,application/json" />
+          <button type="button" class="secondary-action" id="refreshAppButton">更新程序缓存</button>
           <button type="button" class="danger-action" id="cleanupBadButton">清理错误识别记录</button>
+          <p class="version-line" id="versionText"></p>
         </section>
       </section>
 

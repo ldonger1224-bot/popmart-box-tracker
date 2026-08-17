@@ -2,6 +2,7 @@ const STORAGE_KEY = "box-machine-records";
 const ACCOUNTS_KEY = "box-machine-account-names";
 const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
+const APP_VERSION = "v41";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
   { name: "现货", color: "#41bca5" },
@@ -57,6 +58,11 @@ const elements = {
   monthRevenueTotal: document.querySelector("#monthRevenueTotal"),
   entryCount: document.querySelector("#entryCount"),
   exportButton: document.querySelector("#exportButton"),
+  backupButton: document.querySelector("#backupButton"),
+  importDataButton: document.querySelector("#importDataButton"),
+  importDataInput: document.querySelector("#importDataInput"),
+  refreshAppButton: document.querySelector("#refreshAppButton"),
+  versionText: document.querySelector("#versionText"),
   cleanupBadButton: document.querySelector("#cleanupBadButton"),
   accountFilter: document.querySelector("#accountFilter"),
   accountNameGrid: document.querySelector("#accountNameGrid"),
@@ -68,6 +74,7 @@ const elements = {
   stockList: document.querySelector("#stockList"),
   soldList: document.querySelector("#soldList"),
   allAccountSummary: document.querySelector("#allAccountSummary"),
+  statsMonthInput: document.querySelector("#statsMonthInput"),
   statsRevenue: document.querySelector("#statsRevenue"),
   statsProfit: document.querySelector("#statsProfit"),
   statsSoldCount: document.querySelector("#statsSoldCount"),
@@ -102,6 +109,14 @@ function nowLocal() {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function currentMonth() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function selectedStatsMonth() {
+  return elements.statsMonthInput.value || currentMonth();
 }
 
 function setStatus(message, mode = "idle", progress = null) {
@@ -224,10 +239,15 @@ function readAccountNames() {
   const defaults = Array.from({ length: ACCOUNT_COUNT }, (_, index) => `账号 ${index + 1}`);
   try {
     const saved = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || "[]");
-    return defaults.map((fallback, index) => String(saved[index] || fallback));
+    return readFixedAccountNames(saved);
   } catch {
     return defaults;
   }
+}
+
+function readFixedAccountNames(values) {
+  const defaults = Array.from({ length: ACCOUNT_COUNT }, (_, index) => `账号 ${index + 1}`);
+  return defaults.map((fallback, index) => String(values?.[index] || fallback));
 }
 
 function saveAccountNames() {
@@ -388,7 +408,31 @@ function handleFiles(fileList) {
     elements.uploadEmpty.classList.add("hidden");
     elements.previewWrap.classList.remove("hidden");
     elements.imageInput.value = "";
+    warnIfImageLooksIncomplete(colorImageData);
+  });
+}
+
+function warnIfImageLooksIncomplete(imageData) {
+  imageSize(imageData).then((size) => {
+    if (!size.width || !size.height) {
+      setStatus("图片已上传，可以开始识别", "active", 0);
+      return;
+    }
+    const ratio = size.height / size.width;
+    if (ratio < 1.75 || ratio > 2.45 || size.width < 900) {
+      setStatus("图片可能不是完整订单截图，请确认商品、金额和时间都在图里", "warn", 0);
+      return;
+    }
     setStatus("图片已上传，可以开始识别", "active", 0);
+  });
+}
+
+function imageSize(imageData) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.width, height: image.height });
+    image.onerror = () => resolve({ width: 0, height: 0 });
+    image.src = imageData;
   });
 }
 
@@ -1358,14 +1402,17 @@ function renderStockList(sourceEntries) {
           <span class="ledger-tag">成本 ${formatMoney(item.cost)}</span>
         </div>
       </div>
-      <button type="button" class="mini-action" data-edit-id="${item.latestId}">编辑</button>
+      <div class="stock-actions">
+        <button type="button" class="mini-action" data-edit-id="${item.latestId}">编辑</button>
+        <button type="button" class="mini-action sold" data-sell-stock-key="${escapeHtml(item.key)}">批量卖出</button>
+      </div>
     `;
     elements.stockList.append(card);
   });
 }
 
 function renderStats(accountEntries) {
-  const month = new Date().toISOString().slice(0, 7);
+  const month = selectedStatsMonth();
   const soldEntries = accountEntries
     .filter((entry) => Number(entry.salePrice || 0) > 0 && entry.saleTime?.startsWith(month))
     .sort((a, b) => new Date(b.saleTime) - new Date(a.saleTime));
@@ -1410,7 +1457,7 @@ function renderStats(accountEntries) {
 
 function renderAllAccountSummary() {
   if (!elements.allAccountSummary) return;
-  const month = new Date().toISOString().slice(0, 7);
+  const month = selectedStatsMonth();
   elements.allAccountSummary.innerHTML = "";
   const totals = {
     stock: 0,
@@ -1465,10 +1512,8 @@ function aggregateStock(sourceEntries) {
     const stock = Math.max(0, quantity - sold);
     if (!stock) return;
 
-    const styleKey = normalizeStockKey(entry.styleName);
-    const productKey = normalizeStockKey(entry.productName || "未命名商品");
     const saleType = normalizeSaleType(entry.saleType);
-    const key = styleKey ? `${saleType}::style::${styleKey}` : `${saleType}::product::${productKey}`;
+    const key = stockGroupKey(entry);
     const existing = groups.get(key);
     if (existing) {
       existing.stock += stock;
@@ -1484,6 +1529,7 @@ function aggregateStock(sourceEntries) {
       }
     } else {
       groups.set(key, {
+        key,
         name: entry.styleName || entry.productName || "未命名商品",
         productName: entry.productName || "",
         stock,
@@ -1527,6 +1573,90 @@ function normalizeStockKey(value) {
     .replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function stockGroupKey(entry) {
+  const styleKey = normalizeStockKey(entry.styleName);
+  const productKey = normalizeStockKey(entry.productName || "未命名商品");
+  const saleType = normalizeSaleType(entry.saleType);
+  return styleKey ? `${saleType}::style::${styleKey}` : `${saleType}::product::${productKey}`;
+}
+
+function sellStockGroup(stockKey) {
+  const candidates = validStockEntries(entries)
+    .filter((entry) => (entry.accountId || accountId(0)) === activeAccount)
+    .filter((entry) => stockGroupKey(entry) === stockKey)
+    .filter((entry) => Number(entry.salePrice || 0) <= 0)
+    .sort((a, b) => new Date(a.purchaseTime) - new Date(b.purchaseTime));
+  const stock = candidates.reduce((sum, entry) => sum + safeQuantity(entry.quantity), 0);
+  if (!stock) {
+    setStatus("这个款式当前没有可卖库存", "warn", 0);
+    return;
+  }
+
+  const name = candidates[0].styleName || candidates[0].productName || "这个款式";
+  const quantityText = window.prompt(`卖出「${name}」几件？当前库存 ${stock} 件`, "1");
+  if (quantityText === null) return;
+  const quantity = positiveInteger(quantityText);
+  if (!quantity || quantity > stock) {
+    setStatus("卖出数量不能超过当前库存", "warn", 0);
+    return;
+  }
+  const unitPriceText = window.prompt("单件卖出价是多少？", "");
+  if (unitPriceText === null) return;
+  const unitPrice = Number(unitPriceText);
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+    setStatus("请填写正确的卖出价格", "warn", 0);
+    return;
+  }
+  const saleTimeText = window.prompt("卖出时间", nowLocal());
+  if (saleTimeText === null) return;
+  const saleTime = normalizeImportedTime(saleTimeText) || nowLocal();
+
+  let remaining = quantity;
+  const candidateIds = new Set(candidates.map((entry) => entry.id));
+  entries = entries.flatMap((entry) => {
+    if (!candidateIds.has(entry.id) || remaining <= 0) return [entry];
+
+    const quantityInEntry = safeQuantity(entry.quantity);
+    const soldQuantity = Math.min(quantityInEntry, remaining);
+    remaining -= soldQuantity;
+    const unitCost = Number(entry.price || 0) / quantityInEntry;
+    const soldEntry = {
+      ...entry,
+      id: soldQuantity === quantityInEntry ? entry.id : crypto.randomUUID(),
+      quantity: soldQuantity,
+      quantitySource: "manual",
+      price: roundMoney(unitCost * soldQuantity),
+      salePrice: roundMoney(unitPrice * soldQuantity),
+      saleTime,
+      updatedAt: Date.now(),
+    };
+    if (soldQuantity === quantityInEntry) return [soldEntry];
+
+    const remainingQuantity = quantityInEntry - soldQuantity;
+    const remainingEntry = {
+      ...entry,
+      quantity: remainingQuantity,
+      quantitySource: "manual",
+      price: roundMoney(unitCost * remainingQuantity),
+      updatedAt: Date.now(),
+    };
+    return [remainingEntry, soldEntry];
+  });
+
+  saveEntries();
+  renderLedger();
+  setStatus(`已卖出 ${quantity} 件「${name}」`, "active", 100);
+}
+
+function roundMoney(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function positiveInteger(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function editEntry(id) {
@@ -1713,6 +1843,187 @@ function exportCsv() {
   URL.revokeObjectURL(link.href);
 }
 
+function exportBackup() {
+  const backup = {
+    app: "popmart-box-tracker",
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    accountNames,
+    activeAccount,
+    styleMemory,
+    entries,
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `box-machine-backup-${today()}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function readSelectedFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsText(file);
+  });
+}
+
+async function importDataFile(event) {
+  const file = event.target.files?.[0];
+  elements.importDataInput.value = "";
+  if (!file) return;
+
+  try {
+    const text = await readSelectedFile(file);
+    if (/\.json$/i.test(file.name) || /^\s*\{/.test(text)) {
+      restoreBackup(JSON.parse(text));
+      return;
+    }
+    importCsv(text);
+  } catch (error) {
+    console.error(error);
+    setStatus("导入失败，请检查文件格式", "warn", 0);
+  }
+}
+
+function restoreBackup(backup) {
+  if (!backup || !Array.isArray(backup.entries)) {
+    setStatus("备份文件不完整", "warn", 0);
+    return;
+  }
+  if (!window.confirm("恢复备份会覆盖当前本机数据，继续吗？")) return;
+
+  accountNames = Array.isArray(backup.accountNames) ? readFixedAccountNames(backup.accountNames) : accountNames;
+  activeAccount = /^account-[1-6]$/.test(backup.activeAccount || "") ? backup.activeAccount : activeAccount;
+  styleMemory = backup.styleMemory && typeof backup.styleMemory === "object" ? backup.styleMemory : {};
+  entries = backup.entries.map(normalizeEntry);
+
+  saveAccountNames();
+  saveActiveAccount();
+  saveStyleMemory();
+  saveEntries();
+  renderAccountControls();
+  renderAccountSettings();
+  renderLedger();
+  resetForm();
+  resetImage();
+  setStatus(`已恢复 ${entries.length} 条记录`, "active", 100);
+}
+
+function importCsv(text) {
+  const rows = parseCsvRows(text).filter((row) => row.some((cell) => String(cell || "").trim()));
+  if (rows.length < 2) {
+    setStatus("CSV 里没有可导入的记录", "warn", 0);
+    return;
+  }
+  const header = rows[0].map((cell) => String(cell || "").trim());
+  const imported = rows.slice(1).map((row) => csvRowToEntry(header, row)).filter(Boolean);
+  if (!imported.length) {
+    setStatus("CSV 里没有可导入的记录", "warn", 0);
+    return;
+  }
+  if (!window.confirm(`将追加导入 ${imported.length} 条记录，继续吗？`)) return;
+
+  entries = [...entries, ...imported].map(normalizeEntry);
+  imported.forEach((entry) => rememberStyle(entry.productName, entry.styleName));
+  saveEntries();
+  renderLedger();
+  setStatus(`已导入 ${imported.length} 条记录`, "active", 100);
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let value = "";
+  let quoted = false;
+  const input = String(text || "").replace(/^\ufeff/, "");
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    const next = input[index + 1];
+    if (quoted && char === "\"" && next === "\"") {
+      value += "\"";
+      index += 1;
+    } else if (char === "\"") {
+      quoted = !quoted;
+    } else if (!quoted && char === ",") {
+      row.push(value);
+      value = "";
+    } else if (!quoted && (char === "\n" || char === "\r")) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(value);
+      rows.push(row);
+      row = [];
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+  row.push(value);
+  rows.push(row);
+  return rows;
+}
+
+function csvRowToEntry(header, row) {
+  const get = (name) => row[header.indexOf(name)] || "";
+  const productName = get("商品名称").trim();
+  const styleName = get("款式").trim();
+  const price = Number(get("买入价格") || 0);
+  if (!productName || !styleName || !price) return null;
+  return {
+    id: crypto.randomUUID(),
+    accountId: accountIdFromName(get("账号")),
+    productName,
+    styleName,
+    quantity: safeQuantity(get("数量") || 1),
+    quantitySource: "manual",
+    price,
+    purchaseTime: normalizeImportedTime(get("购买时间")) || nowLocal(),
+    saleType: normalizeSaleType(get("状态")),
+    salePrice: Number(get("卖出价格") || 0),
+    saleTime: normalizeImportedTime(get("卖出时间")),
+    note: get("备注").trim(),
+    image: "",
+    productImage: "",
+    styleImage: "",
+    rawText: "",
+    channel: "抽盒机",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
+function accountIdFromName(name) {
+  const index = accountNames.findIndex((item) => item === String(name || "").trim());
+  return index >= 0 ? accountId(index) : accountId(0);
+}
+
+function normalizeImportedTime(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.includes("T") ? text.slice(0, 16) : text.replace(/\s+/, "T").slice(0, 16);
+}
+
+async function refreshAppCache() {
+  if (!window.confirm("只更新程序缓存，不会删除库存数据。继续吗？")) return;
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+    window.location.href = `./?fresh=${Date.now()}`;
+  } catch (error) {
+    console.error(error);
+    setStatus("更新缓存失败，请稍后再试", "warn", 0);
+  }
+}
+
 elements.selectButton.addEventListener("click", () => elements.imageInput.click());
 elements.replaceButton.addEventListener("click", () => elements.imageInput.click());
 elements.imageInput.addEventListener("change", (event) => handleFiles(event.target.files));
@@ -1728,6 +2039,10 @@ elements.formDeleteButton.addEventListener("click", () => {
 });
 elements.entryForm.addEventListener("submit", saveEntry);
 elements.exportButton.addEventListener("click", exportCsv);
+elements.backupButton.addEventListener("click", exportBackup);
+elements.importDataButton.addEventListener("click", () => elements.importDataInput.click());
+elements.importDataInput.addEventListener("change", importDataFile);
+elements.refreshAppButton.addEventListener("click", refreshAppCache);
 elements.cleanupBadButton.addEventListener("click", cleanupBadEntries);
 elements.activeAccountSelect.addEventListener("change", (event) => {
   activeAccount = event.target.value;
@@ -1746,6 +2061,7 @@ elements.accountFilter.addEventListener("change", () => {
 });
 elements.statusFilter.addEventListener("change", renderLedger);
 elements.stockSearchInput.addEventListener("input", renderStockSearch);
+elements.statsMonthInput.addEventListener("change", renderLedger);
 
 elements.ledgerList.addEventListener("click", (event) => {
   const deleteButton = event.target.closest("[data-delete-id]");
@@ -1759,6 +2075,11 @@ elements.ledgerList.addEventListener("click", (event) => {
 });
 
 elements.stockList.addEventListener("click", (event) => {
+  const sellButton = event.target.closest("[data-sell-stock-key]");
+  if (sellButton) {
+    sellStockGroup(sellButton.dataset.sellStockKey);
+    return;
+  }
   const button = event.target.closest("[data-edit-id]");
   if (!button) return;
   editEntry(button.dataset.editId);
@@ -1823,5 +2144,7 @@ if ("serviceWorker" in navigator) {
 renderAccountControls();
 renderAccountSettings();
 resetForm();
+elements.statsMonthInput.value = currentMonth();
+elements.versionText.textContent = `当前版本 ${APP_VERSION}`;
 saveEntries();
 renderLedger();
