@@ -802,7 +802,7 @@ textarea:focus {
 }
 
 .stock-card {
-  grid-template-columns: 72px minmax(0, 1fr) auto;
+  grid-template-columns: 72px minmax(0, 1fr);
   padding: 11px;
   transition:
     border-color 160ms ease,
@@ -882,10 +882,18 @@ textarea:focus {
 }
 
 .stock-actions {
-  display: grid;
-  justify-items: end;
+  grid-column: 2;
+  display: flex;
   gap: 6px;
-  min-width: 74px;
+  align-items: center;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.stock-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .stock-detail-grid {
@@ -933,6 +941,7 @@ textarea:focus {
 
 .mini-action {
   min-height: 32px;
+  flex: 0 0 auto;
   padding: 0 10px;
 }
 
@@ -1166,8 +1175,7 @@ textarea:focus {
   .stock-actions {
     grid-column: 2;
     justify-self: start;
-    grid-template-columns: repeat(2, minmax(72px, auto));
-    justify-items: stretch;
+    max-width: 100%;
   }
 
   .stock-detail-row {
