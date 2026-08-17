@@ -2,7 +2,8 @@ const STORAGE_KEY = "box-machine-records";
 const ACCOUNTS_KEY = "box-machine-account-names";
 const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
-const APP_VERSION = "v42";
+const BACKUP_META_KEY = "box-machine-backup-meta";
+const APP_VERSION = "v43";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
   { name: "现货", color: "#41bca5" },
@@ -68,6 +69,10 @@ const elements = {
   accountNameGrid: document.querySelector("#accountNameGrid"),
   accountProductsGrid: document.querySelector("#accountProductsGrid"),
   statusFilter: document.querySelector("#statusFilter"),
+  inventorySearchInput: document.querySelector("#inventorySearchInput"),
+  soldHistoryToggle: document.querySelector("#soldHistoryToggle"),
+  soldHistoryPanel: document.querySelector("#soldHistoryPanel"),
+  soldHistoryList: document.querySelector("#soldHistoryList"),
   statePills: document.querySelector("#statePills"),
   stockSearchInput: document.querySelector("#stockSearchInput"),
   stockSearchResults: document.querySelector("#stockSearchResults"),
@@ -78,11 +83,16 @@ const elements = {
   statsRevenue: document.querySelector("#statsRevenue"),
   statsProfit: document.querySelector("#statsProfit"),
   statsSoldCount: document.querySelector("#statsSoldCount"),
+  statsSpend: document.querySelector("#statsSpend"),
+  statsReturnRate: document.querySelector("#statsReturnRate"),
+  backupReminder: document.querySelector("#backupReminder"),
   sellSheet: document.querySelector("#sellSheet"),
   sellSheetTitle: document.querySelector("#sellSheetTitle"),
   sellSheetMeta: document.querySelector("#sellSheetMeta"),
   sellQuantityInput: document.querySelector("#sellQuantityInput"),
   sellUnitPriceInput: document.querySelector("#sellUnitPriceInput"),
+  sellSplitPricesInput: document.querySelector("#sellSplitPricesInput"),
+  sellPriceLines: document.querySelector("#sellPriceLines"),
   sellTimeInput: document.querySelector("#sellTimeInput"),
   sellCancelButton: document.querySelector("#sellCancelButton"),
   sellConfirmButton: document.querySelector("#sellConfirmButton"),
@@ -105,6 +115,8 @@ let scanRunId = 0;
 let ocrWorkerPromise = null;
 let currentOcrProgress = null;
 let sellingStockKey = "";
+let expandedStockKeys = new Set();
+let showSoldHistory = false;
 
 function formatMoney(value) {
   return `¥${Number(value || 0).toFixed(2)}`;
@@ -1224,10 +1236,12 @@ function findLabeledTime(text, label) {
 function filteredEntries() {
   const status = elements.statusFilter.value;
   const account = activeAccount;
+  const query = normalizeStockKey(elements.inventorySearchInput.value);
   return entries.filter((entry) => {
     const matchesStatus = !status || entry.saleType === status;
     const matchesAccount = !account || (entry.accountId || accountId(0)) === account;
-    return matchesStatus && matchesAccount;
+    const matchesQuery = !query || normalizeStockKey(`${entry.styleName || ""}${entry.productName || ""}`).includes(query);
+    return matchesStatus && matchesAccount && matchesQuery;
   });
 }
 
@@ -1283,14 +1297,18 @@ function renderLedger() {
   renderStockSearch();
   renderStockList(visibleEntries);
   renderStats(accountEntries);
+  renderSoldHistory(accountEntries);
   renderAllAccountSummary();
   renderAccountProducts();
+  renderBackupReminder();
 }
 
 function renderStatePills(sourceEntries) {
   elements.statePills.innerHTML = "";
   SALE_TYPES.forEach((type) => {
-    const stateEntries = validStockEntries(sourceEntries).filter((entry) => entry.saleType === type.name);
+    const stateEntries = validStockEntries(sourceEntries)
+      .filter((entry) => Number(entry.salePrice || 0) <= 0)
+      .filter((entry) => entry.saleType === type.name);
     const total = stateEntries.reduce((sum, entry) => sum + Number(entry.price || 0), 0);
     const quantity = stateEntries.reduce((sum, entry) => sum + safeQuantity(entry.quantity), 0);
     const pill = document.createElement("article");
@@ -1400,6 +1418,7 @@ function renderStockList(sourceEntries) {
   stockItems.forEach((item) => {
     const card = document.createElement("article");
     card.className = "stock-card";
+    const expanded = expandedStockKeys.has(item.key);
     card.innerHTML = `
       <img class="stock-image" alt="" src="${item.image || ""}">
       <div>
@@ -1413,11 +1432,44 @@ function renderStockList(sourceEntries) {
       </div>
       <div class="stock-actions">
         <button type="button" class="mini-action sold" data-sell-stock-key="${escapeHtml(item.key)}">卖出</button>
+        ${normalizeSaleType(item.saleType) === "预售" ? `<button type="button" class="mini-action arrival" data-arrive-stock-key="${escapeHtml(item.key)}">到货</button>` : ""}
         <button type="button" class="mini-action" data-edit-id="${item.latestId}">编辑</button>
+        <button type="button" class="mini-action" data-toggle-stock-key="${escapeHtml(item.key)}">${expanded ? "收起" : "明细"}</button>
       </div>
+      ${expanded ? renderStockDetailRows(item.key, sourceEntries) : ""}
     `;
     elements.stockList.append(card);
   });
+}
+
+function renderStockDetailRows(stockKey, sourceEntries) {
+  const detailEntries = validStockEntries(sourceEntries)
+    .filter((entry) => stockGroupKey(entry) === stockKey)
+    .filter((entry) => Number(entry.salePrice || 0) <= 0)
+    .sort((a, b) => new Date(b.purchaseTime) - new Date(a.purchaseTime));
+
+  if (!detailEntries.length) {
+    return `<div class="stock-detail-grid"><p class="search-empty">这组库存没有可展开的明细。</p></div>`;
+  }
+
+  return `
+    <div class="stock-detail-grid">
+      ${detailEntries
+        .map((entry) => `
+          <div class="stock-detail-row">
+            <div>
+              <strong>${formatDateTime(entry.purchaseTime)}</strong>
+              <span>${safeQuantity(entry.quantity)} 件 · 成本 ${formatMoney(entry.price)}</span>
+            </div>
+            <div class="detail-actions">
+              ${normalizeSaleType(entry.saleType) === "预售" ? `<button type="button" class="mini-action arrival" data-arrive-id="${entry.id}">到货</button>` : ""}
+              <button type="button" class="mini-action" data-edit-id="${entry.id}">编辑</button>
+            </div>
+          </div>
+        `)
+        .join("")}
+    </div>
+  `;
 }
 
 function renderStats(accountEntries) {
@@ -1425,13 +1477,19 @@ function renderStats(accountEntries) {
   const soldEntries = accountEntries
     .filter((entry) => Number(entry.salePrice || 0) > 0 && entry.saleTime?.startsWith(month))
     .sort((a, b) => new Date(b.saleTime) - new Date(a.saleTime));
+  const boughtEntries = accountEntries.filter((entry) => entry.purchaseTime?.startsWith(month));
   const revenue = soldEntries.reduce((sum, entry) => sum + Number(entry.salePrice || 0), 0);
+  const soldCost = soldEntries.reduce((sum, entry) => sum + Number(entry.price || 0), 0);
   const profit = soldEntries.reduce((sum, entry) => sum + Number(entry.salePrice || 0) - Number(entry.price || 0), 0);
   const soldCount = soldEntries.reduce((sum, entry) => sum + safeQuantity(entry.quantity), 0);
+  const spend = boughtEntries.reduce((sum, entry) => sum + Number(entry.price || 0), 0);
+  const returnRate = soldCost > 0 ? Math.round((revenue / soldCost) * 100) : 0;
 
   elements.statsRevenue.textContent = formatMoney(revenue);
   elements.statsProfit.textContent = formatMoney(profit);
   elements.statsSoldCount.textContent = String(soldCount);
+  elements.statsSpend.textContent = formatMoney(spend);
+  elements.statsReturnRate.textContent = `${returnRate}%`;
   elements.soldList.innerHTML = "";
 
   if (!soldEntries.length) {
@@ -1462,6 +1520,70 @@ function renderStats(accountEntries) {
     `;
     elements.soldList.append(row);
   });
+}
+
+function renderSoldHistory(accountEntries) {
+  elements.soldHistoryPanel.classList.toggle("hidden", !showSoldHistory);
+  elements.soldHistoryToggle.textContent = showSoldHistory ? "隐藏已售历史" : "显示已售历史";
+  if (!showSoldHistory) return;
+
+  const query = normalizeStockKey(elements.inventorySearchInput.value);
+  const soldEntries = accountEntries
+    .filter((entry) => Number(entry.salePrice || 0) > 0)
+    .filter((entry) => !query || normalizeStockKey(`${entry.styleName || ""}${entry.productName || ""}`).includes(query))
+    .sort((a, b) => new Date(b.saleTime || b.purchaseTime) - new Date(a.saleTime || a.purchaseTime));
+  elements.soldHistoryList.innerHTML = "";
+
+  if (!soldEntries.length) {
+    const empty = document.createElement("div");
+    empty.className = "ledger-empty";
+    empty.textContent = "当前账号还没有已售历史。";
+    elements.soldHistoryList.append(empty);
+    return;
+  }
+
+  soldEntries.forEach((entry) => {
+    const profitValue = Number(entry.salePrice || 0) - Number(entry.price || 0);
+    const row = document.createElement("article");
+    row.className = "ledger-entry";
+    row.innerHTML = `
+      <img class="ledger-thumb" alt="" src="${entry.productImage || entry.image || ""}">
+      <div>
+        <h3>${escapeHtml(entry.styleName || entry.productName || "未命名商品")}</h3>
+        <p>${formatDateTime(entry.saleTime)} · ${safeQuantity(entry.quantity)} 件</p>
+        <div class="tag-line">
+          <span class="ledger-tag sold">卖出 ${formatMoney(entry.salePrice)}</span>
+          <span class="ledger-tag">利润 ${formatMoney(profitValue)}</span>
+        </div>
+      </div>
+      <div class="ledger-side">
+        <button type="button" class="mini-action" data-edit-id="${entry.id}">编辑</button>
+      </div>
+    `;
+    elements.soldHistoryList.append(row);
+  });
+}
+
+function markEntryArrived(id) {
+  const entry = entries.find((item) => item.id === id);
+  if (!entry || normalizeSaleType(entry.saleType) !== "预售" || Number(entry.salePrice || 0) > 0) return;
+  entries = entries.map((item) => (item.id === id ? { ...item, saleType: "现货", updatedAt: Date.now() } : item));
+  saveEntries();
+  renderLedger();
+  setStatus("已改为现货", "active", 100);
+}
+
+function markStockGroupArrived(stockKey) {
+  const candidates = stockSellCandidates(stockKey).filter((entry) => normalizeSaleType(entry.saleType) === "预售");
+  if (!candidates.length) return;
+  const name = candidates[0].styleName || candidates[0].productName || "这组库存";
+  if (!window.confirm(`把「${name}」这组预售库存改为现货吗？`)) return;
+  const ids = new Set(candidates.map((entry) => entry.id));
+  entries = entries.map((entry) => (ids.has(entry.id) ? { ...entry, saleType: "现货", updatedAt: Date.now() } : entry));
+  expandedStockKeys.delete(stockKey);
+  saveEntries();
+  renderLedger();
+  setStatus(`已将「${name}」改为现货`, "active", 100);
 }
 
 function renderAllAccountSummary() {
@@ -1615,6 +1737,8 @@ function openSellSheet(stockKey) {
   elements.sellQuantityInput.max = String(stock);
   elements.sellQuantityInput.value = "1";
   elements.sellUnitPriceInput.value = "";
+  elements.sellSplitPricesInput.checked = false;
+  renderSellPriceLines();
   elements.sellTimeInput.value = nowLocal();
   elements.sellSheet.classList.remove("hidden");
   elements.sellSheet.setAttribute("aria-hidden", "false");
@@ -1629,60 +1753,129 @@ function closeSellSheet() {
   document.body.classList.remove("sheet-open");
 }
 
+function renderSellPriceLines() {
+  const quantity = Math.min(
+    positiveInteger(elements.sellQuantityInput.value) || 1,
+    positiveInteger(elements.sellQuantityInput.max) || 20,
+  );
+  const split = elements.sellSplitPricesInput.checked;
+  elements.sellPriceLines.classList.toggle("hidden", !split);
+  if (!split) {
+    elements.sellPriceLines.innerHTML = "";
+    return;
+  }
+
+  const oldValues = [...elements.sellPriceLines.querySelectorAll("input")].map((input) => input.value);
+  elements.sellPriceLines.innerHTML = Array.from({ length: quantity }, (_, index) => `
+    <label>
+      第 ${index + 1} 件
+      <input class="split-price-input" type="number" min="0" step="0.01" placeholder="0.00" value="${escapeHtml(oldValues[index] || "")}" />
+    </label>
+  `).join("");
+}
+
+function selectedSellPrices(quantity) {
+  if (!elements.sellSplitPricesInput.checked) {
+    const unitPrice = Number(elements.sellUnitPriceInput.value);
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) return [];
+    return Array.from({ length: quantity }, () => unitPrice);
+  }
+
+  const prices = [...elements.sellPriceLines.querySelectorAll("input")]
+    .slice(0, quantity)
+    .map((input) => Number(input.value));
+  return prices.every((price) => Number.isFinite(price) && price > 0) ? prices : [];
+}
+
 function confirmSellStockGroup() {
   if (!sellingStockKey) return;
   const candidates = stockSellCandidates(sellingStockKey);
   const stock = candidates.reduce((sum, entry) => sum + safeQuantity(entry.quantity), 0);
   const name = candidates[0]?.styleName || candidates[0]?.productName || "这个款式";
+  if (!stock) {
+    closeSellSheet();
+    setStatus("这个款式当前没有可卖库存", "warn", 0);
+    return;
+  }
   const quantity = positiveInteger(elements.sellQuantityInput.value);
   if (!quantity || quantity > stock) {
     setStatus("卖出数量不能超过当前库存", "warn", 0);
     return;
   }
-  const unitPrice = Number(elements.sellUnitPriceInput.value);
-  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+  const prices = selectedSellPrices(quantity);
+  if (prices.length !== quantity) {
     setStatus("请填写正确的卖出价格", "warn", 0);
-    elements.sellUnitPriceInput.focus();
+    const firstEmpty = elements.sellSplitPricesInput.checked
+      ? elements.sellPriceLines.querySelector("input")
+      : elements.sellUnitPriceInput;
+    firstEmpty?.focus();
     return;
   }
   const saleTime = normalizeImportedTime(elements.sellTimeInput.value) || nowLocal();
 
-  let remaining = quantity;
-  const candidateIds = new Set(candidates.map((entry) => entry.id));
-  entries = entries.flatMap((entry) => {
-    if (!candidateIds.has(entry.id) || remaining <= 0) return [entry];
-
-    const quantityInEntry = safeQuantity(entry.quantity);
-    const soldQuantity = Math.min(quantityInEntry, remaining);
-    remaining -= soldQuantity;
-    const unitCost = Number(entry.price || 0) / quantityInEntry;
-    const soldEntry = {
-      ...entry,
-      id: soldQuantity === quantityInEntry ? entry.id : crypto.randomUUID(),
-      quantity: soldQuantity,
-      quantitySource: "manual",
-      price: roundMoney(unitCost * soldQuantity),
-      salePrice: roundMoney(unitPrice * soldQuantity),
-      saleTime,
-      updatedAt: Date.now(),
-    };
-    if (soldQuantity === quantityInEntry) return [soldEntry];
-
-    const remainingQuantity = quantityInEntry - soldQuantity;
-    const remainingEntry = {
-      ...entry,
-      quantity: remainingQuantity,
-      quantitySource: "manual",
-      price: roundMoney(unitCost * remainingQuantity),
-      updatedAt: Date.now(),
-    };
-    return [remainingEntry, soldEntry];
-  });
-
+  applyStockSale(candidates, prices, saleTime);
   saveEntries();
   renderLedger();
   closeSellSheet();
   setStatus(`已卖出 ${quantity} 件「${name}」`, "active", 100);
+}
+
+function applyStockSale(candidates, prices, saleTime) {
+  let priceIndex = 0;
+  const candidateIds = new Set(candidates.map((entry) => entry.id));
+  entries = entries.flatMap((entry) => {
+    if (!candidateIds.has(entry.id) || priceIndex >= prices.length) return [entry];
+
+    const quantityInEntry = safeQuantity(entry.quantity);
+    const soldQuantity = Math.min(quantityInEntry, prices.length - priceIndex);
+    const soldPrices = prices.slice(priceIndex, priceIndex + soldQuantity);
+    priceIndex += soldQuantity;
+    const unitCost = Number(entry.price || 0) / quantityInEntry;
+    const remainingQuantity = quantityInEntry - soldQuantity;
+    const result = [];
+
+    if (remainingQuantity > 0) {
+      result.push({
+        ...entry,
+        quantity: remainingQuantity,
+        quantitySource: "manual",
+        price: roundMoney(unitCost * remainingQuantity),
+        updatedAt: Date.now(),
+      });
+    }
+
+    if (allSamePrice(soldPrices)) {
+      result.push({
+        ...entry,
+        id: remainingQuantity === 0 ? entry.id : crypto.randomUUID(),
+        quantity: soldQuantity,
+        quantitySource: "manual",
+        price: roundMoney(unitCost * soldQuantity),
+        salePrice: roundMoney(soldPrices.reduce((sum, price) => sum + price, 0)),
+        saleTime,
+        updatedAt: Date.now(),
+      });
+      return result;
+    }
+
+    soldPrices.forEach((price) => {
+      result.push({
+        ...entry,
+        id: crypto.randomUUID(),
+        quantity: 1,
+        quantitySource: "manual",
+        price: roundMoney(unitCost),
+        salePrice: roundMoney(price),
+        saleTime,
+        updatedAt: Date.now(),
+      });
+    });
+    return result;
+  });
+}
+
+function allSamePrice(values) {
+  return values.every((value) => roundMoney(value) === roundMoney(values[0]));
 }
 
 function roundMoney(value) {
@@ -1894,6 +2087,40 @@ function exportBackup() {
   link.download = `box-machine-backup-${today()}.json`;
   link.click();
   URL.revokeObjectURL(link.href);
+  localStorage.setItem(BACKUP_META_KEY, JSON.stringify({ backedUpAt: Date.now(), entryCount: entries.length }));
+  renderBackupReminder();
+}
+
+function readBackupMeta() {
+  try {
+    return JSON.parse(localStorage.getItem(BACKUP_META_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function renderBackupReminder() {
+  if (!elements.backupReminder) return;
+  const meta = readBackupMeta();
+  const backedUpAt = Number(meta.backedUpAt || 0);
+  const backedUpCount = Number(meta.entryCount || 0);
+  const daysSinceBackup = backedUpAt ? Math.floor((Date.now() - backedUpAt) / 86400000) : Infinity;
+  const newRecords = Math.max(0, entries.length - backedUpCount);
+  const shouldRemind = entries.length >= 10 && (!backedUpAt || daysSinceBackup >= 14 || newRecords >= 30);
+
+  elements.backupReminder.classList.toggle("hidden", !shouldRemind);
+  if (!shouldRemind) {
+    elements.backupReminder.textContent = "";
+    return;
+  }
+
+  if (!backedUpAt) {
+    elements.backupReminder.textContent = "建议备份一次：这些库存只保存在当前手机浏览器里。";
+  } else if (newRecords >= 30) {
+    elements.backupReminder.textContent = `距离上次备份已新增 ${newRecords} 条记录，建议备份一次。`;
+  } else {
+    elements.backupReminder.textContent = `距离上次备份已 ${daysSinceBackup} 天，建议备份一次。`;
+  }
 }
 
 function readSelectedFile(file) {
@@ -2095,6 +2322,11 @@ elements.accountFilter.addEventListener("change", () => {
   renderLedger();
 });
 elements.statusFilter.addEventListener("change", renderLedger);
+elements.inventorySearchInput.addEventListener("input", renderLedger);
+elements.soldHistoryToggle.addEventListener("click", () => {
+  showSoldHistory = !showSoldHistory;
+  renderLedger();
+});
 elements.stockSearchInput.addEventListener("input", renderStockSearch);
 elements.statsMonthInput.addEventListener("change", renderLedger);
 
@@ -2115,12 +2347,39 @@ elements.stockList.addEventListener("click", (event) => {
     openSellSheet(sellButton.dataset.sellStockKey);
     return;
   }
+  const arriveGroupButton = event.target.closest("[data-arrive-stock-key]");
+  if (arriveGroupButton) {
+    markStockGroupArrived(arriveGroupButton.dataset.arriveStockKey);
+    return;
+  }
+  const arriveButton = event.target.closest("[data-arrive-id]");
+  if (arriveButton) {
+    markEntryArrived(arriveButton.dataset.arriveId);
+    return;
+  }
+  const toggleButton = event.target.closest("[data-toggle-stock-key]");
+  if (toggleButton) {
+    const key = toggleButton.dataset.toggleStockKey;
+    if (expandedStockKeys.has(key)) {
+      expandedStockKeys.delete(key);
+    } else {
+      expandedStockKeys.add(key);
+    }
+    renderLedger();
+    return;
+  }
   const button = event.target.closest("[data-edit-id]");
   if (!button) return;
   editEntry(button.dataset.editId);
 });
 
 elements.soldList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-edit-id]");
+  if (!button) return;
+  editEntry(button.dataset.editId);
+});
+
+elements.soldHistoryList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-edit-id]");
   if (!button) return;
   editEntry(button.dataset.editId);
@@ -2142,6 +2401,8 @@ elements.tabButtons.forEach((button) => {
 
 elements.sellCancelButton.addEventListener("click", closeSellSheet);
 elements.sellConfirmButton.addEventListener("click", confirmSellStockGroup);
+elements.sellQuantityInput.addEventListener("input", renderSellPriceLines);
+elements.sellSplitPricesInput.addEventListener("change", renderSellPriceLines);
 elements.sellSheet.addEventListener("click", (event) => {
   if (event.target === elements.sellSheet) closeSellSheet();
 });

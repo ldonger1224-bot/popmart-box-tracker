@@ -540,6 +540,40 @@ textarea:focus {
   gap: 10px;
 }
 
+.inventory-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.inventory-tools .ghost-action {
+  min-width: 112px;
+}
+
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.inline-check input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.split-price-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(46, 184, 158, 0.08);
+}
+
 .stock-search-panel {
   display: grid;
   gap: 8px;
@@ -662,10 +696,15 @@ textarea:focus {
   background: var(--surface-soft);
 }
 
-.state-pills,
-.stats-grid {
+.state-pills {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   gap: 8px;
 }
 
@@ -826,6 +865,44 @@ textarea:focus {
   min-width: 74px;
 }
 
+.stock-detail-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 7px;
+  padding-top: 4px;
+}
+
+.stock-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 9px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.stock-detail-row strong,
+.stock-detail-row span {
+  display: block;
+}
+
+.stock-detail-row strong {
+  font-size: 0.86rem;
+}
+
+.stock-detail-row span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .ledger-amount {
   white-space: nowrap;
   font-weight: 950;
@@ -839,6 +916,11 @@ textarea:focus {
 .mini-action.sold {
   background: linear-gradient(135deg, var(--mint), #1a8f7b);
   color: #fff;
+}
+
+.mini-action.arrival {
+  background: rgba(66, 111, 208, 0.14);
+  color: var(--blue);
 }
 
 .danger-mini {
@@ -901,6 +983,17 @@ textarea:focus {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.backup-reminder {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(217, 154, 58, 0.32);
+  border-radius: 8px;
+  background: rgba(217, 154, 58, 0.12);
+  color: #8a5f1e;
+  font-size: 0.84rem;
+  font-weight: 850;
 }
 
 .settings-card summary {
@@ -1033,6 +1126,11 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .inventory-tools,
+  .split-price-list {
+    grid-template-columns: 1fr;
+  }
+
   .stock-card {
     grid-template-columns: 62px minmax(0, 1fr);
   }
@@ -1042,6 +1140,14 @@ textarea:focus {
     justify-self: start;
     grid-template-columns: repeat(2, minmax(72px, auto));
     justify-items: stretch;
+  }
+
+  .stock-detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-actions {
+    justify-content: flex-start;
   }
 
   .stock-image {

@@ -177,8 +177,24 @@
             <option>预售</option>
           </select>
         </div>
+        <div class="inventory-tools">
+          <label for="inventorySearchInput">
+            搜索库存
+            <input id="inventorySearchInput" type="search" placeholder="输入款式名" autocomplete="off" />
+          </label>
+          <button type="button" class="ghost-action" id="soldHistoryToggle">显示已售历史</button>
+        </div>
         <div class="state-pills" id="statePills"></div>
         <div class="stock-list" id="stockList"></div>
+        <section class="ledger-panel hidden" id="soldHistoryPanel" aria-label="已售历史">
+          <div class="section-head">
+            <div>
+              <h2>已售历史</h2>
+              <p>当前账号卖出的款式记录</p>
+            </div>
+          </div>
+          <div class="ledger-list" id="soldHistoryList"></div>
+        </section>
         <section class="ledger-panel" aria-label="当前账号记录列表">
           <div class="section-head">
             <div>
@@ -210,6 +226,14 @@
           <article>
             <span>已售件数</span>
             <strong id="statsSoldCount">0</strong>
+          </article>
+          <article>
+            <span>本月支出</span>
+            <strong id="statsSpend">¥0.00</strong>
+          </article>
+          <article>
+            <span>回本率</span>
+            <strong id="statsReturnRate">0%</strong>
           </article>
         </div>
         <section class="ledger-panel">
@@ -263,6 +287,7 @@
             <button type="button" class="secondary-action" id="importDataButton">恢复/导入数据</button>
             <button type="button" class="secondary-action" id="exportButton">导出 CSV</button>
           </div>
+          <p class="backup-reminder hidden" id="backupReminder"></p>
           <input class="hidden" id="importDataInput" type="file" accept=".json,.csv,text/csv,application/json" />
         </section>
         <section class="settings-card">
@@ -301,6 +326,11 @@
               <input id="sellUnitPriceInput" type="number" min="0" step="0.01" placeholder="0.00" />
             </label>
           </div>
+          <label class="inline-check">
+            <input id="sellSplitPricesInput" type="checkbox" />
+            <span>每件卖出价不同</span>
+          </label>
+          <div class="split-price-list hidden" id="sellPriceLines"></div>
           <label>
             卖出时间
             <input id="sellTimeInput" type="datetime-local" />
