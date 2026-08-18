@@ -3,7 +3,7 @@ const ACCOUNTS_KEY = "box-machine-account-names";
 const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
 const BACKUP_META_KEY = "box-machine-backup-meta";
-const APP_VERSION = "v47";
+const APP_VERSION = "v48";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
   { name: "现货", color: "#41bca5" },

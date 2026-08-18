@@ -428,6 +428,13 @@ select {
   padding: 0 12px;
 }
 
+input[type="datetime-local"],
+input[type="month"] {
+  font-size: 0.94rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
 textarea {
   resize: vertical;
   padding: 12px;
@@ -826,13 +833,8 @@ textarea:focus {
 }
 
 .stock-image {
-  width: 90px;
-  height: 90px;
-  padding: 8px;
-  border: 1px solid rgba(35, 32, 29, 0.08);
-  background:
-    linear-gradient(135deg, rgba(239, 111, 146, 0.12), rgba(46, 184, 158, 0.1)),
-    #fff8f2;
+  width: 82px;
+  height: 82px;
 }
 
 .ledger-thumb {
@@ -1219,6 +1221,12 @@ textarea:focus {
 
   .field-row {
     grid-template-columns: 1fr;
+  }
+
+  input[type="datetime-local"],
+  input[type="month"] {
+    padding: 0 8px;
+    font-size: 0.84rem;
   }
 
   .inventory-tools,
