@@ -3,7 +3,7 @@ const ACCOUNTS_KEY = "box-machine-account-names";
 const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
 const BACKUP_META_KEY = "box-machine-backup-meta";
-const APP_VERSION = "v46";
+const APP_VERSION = "v47";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
   { name: "现货", color: "#41bca5" },
@@ -127,6 +127,7 @@ let currentOcrProgress = null;
 let sellingStockKey = "";
 let addingStockKey = "";
 let expandedStockKeys = new Set();
+let activeStockMenuKey = "";
 let showSoldHistory = false;
 
 function formatMoney(value) {
@@ -1432,11 +1433,12 @@ function renderStockList(sourceEntries) {
     const card = document.createElement("article");
     card.className = "stock-card";
     const expanded = expandedStockKeys.has(item.key);
+    const menuOpen = activeStockMenuKey === item.key;
     card.innerHTML = `
       <img class="stock-image" alt="" src="${item.image || ""}">
-      <div>
+      <div class="stock-main">
         <h3>${escapeHtml(item.name)}</h3>
-        <p>${item.productName && item.productName !== item.name ? escapeHtml(item.productName) : "泡泡玛特抽盒机"}</p>
+        <p class="stock-series">${item.productName && item.productName !== item.name ? escapeHtml(item.productName) : "泡泡玛特抽盒机"}</p>
         <div class="tag-line">
           <span class="ledger-tag state" style="background:${saleTypeColor(item.saleType)}">${escapeHtml(normalizeSaleType(item.saleType))}</span>
           <span class="ledger-tag">库存 ×${item.stock}</span>
@@ -1446,9 +1448,12 @@ function renderStockList(sourceEntries) {
       <div class="stock-actions">
         <button type="button" class="mini-action add-stock" data-add-stock-key="${escapeHtml(item.key)}">加库存</button>
         <button type="button" class="mini-action sold" data-sell-stock-key="${escapeHtml(item.key)}">卖出</button>
+        <button type="button" class="mini-action more" data-stock-more-toggle="${escapeHtml(item.key)}" aria-expanded="${menuOpen ? "true" : "false"}" aria-label="更多操作">⋯</button>
+      </div>
+      <div class="stock-more-menu ${menuOpen ? "" : "hidden"}" data-stock-more-menu="${escapeHtml(item.key)}">
         ${normalizeSaleType(item.saleType) === "预售" ? `<button type="button" class="mini-action arrival" data-arrive-stock-key="${escapeHtml(item.key)}">到货</button>` : ""}
         <button type="button" class="mini-action" data-edit-id="${item.latestId}">编辑</button>
-        <button type="button" class="mini-action" data-toggle-stock-key="${escapeHtml(item.key)}">${expanded ? "收起" : "明细"}</button>
+        <button type="button" class="mini-action" data-toggle-stock-key="${escapeHtml(item.key)}">${expanded ? "收起明细" : "查看明细"}</button>
       </div>
       ${expanded ? renderStockDetailRows(item.key, sourceEntries) : ""}
     `;
@@ -2093,6 +2098,7 @@ function switchTab(tab) {
     stats: "收益统计",
     settings: "设置账号",
   };
+  activeStockMenuKey = "";
   elements.tabButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.tab === tab);
   });
@@ -2462,26 +2468,38 @@ elements.ledgerList.addEventListener("click", (event) => {
 elements.stockList.addEventListener("click", (event) => {
   const addButton = event.target.closest("[data-add-stock-key]");
   if (addButton) {
+    activeStockMenuKey = "";
     openAddStockSheet(addButton.dataset.addStockKey);
     return;
   }
   const sellButton = event.target.closest("[data-sell-stock-key]");
   if (sellButton) {
+    activeStockMenuKey = "";
     openSellSheet(sellButton.dataset.sellStockKey);
+    return;
+  }
+  const moreButton = event.target.closest("[data-stock-more-toggle]");
+  if (moreButton) {
+    const key = moreButton.dataset.stockMoreToggle;
+    activeStockMenuKey = activeStockMenuKey === key ? "" : key;
+    renderLedger();
     return;
   }
   const arriveGroupButton = event.target.closest("[data-arrive-stock-key]");
   if (arriveGroupButton) {
+    activeStockMenuKey = "";
     markStockGroupArrived(arriveGroupButton.dataset.arriveStockKey);
     return;
   }
   const arriveButton = event.target.closest("[data-arrive-id]");
   if (arriveButton) {
+    activeStockMenuKey = "";
     markEntryArrived(arriveButton.dataset.arriveId);
     return;
   }
   const toggleButton = event.target.closest("[data-toggle-stock-key]");
   if (toggleButton) {
+    activeStockMenuKey = "";
     const key = toggleButton.dataset.toggleStockKey;
     if (expandedStockKeys.has(key)) {
       expandedStockKeys.delete(key);
@@ -2493,6 +2511,7 @@ elements.stockList.addEventListener("click", (event) => {
   }
   const button = event.target.closest("[data-edit-id]");
   if (!button) return;
+  activeStockMenuKey = "";
   editEntry(button.dataset.editId);
 });
 
