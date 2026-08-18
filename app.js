@@ -3,7 +3,7 @@ const ACCOUNTS_KEY = "box-machine-account-names";
 const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
 const BACKUP_META_KEY = "box-machine-backup-meta";
-const APP_VERSION = "v48";
+const APP_VERSION = "v49";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
   { name: "现货", color: "#41bca5" },
@@ -1434,6 +1434,8 @@ function renderStockList(sourceEntries) {
     card.className = "stock-card";
     const expanded = expandedStockKeys.has(item.key);
     const menuOpen = activeStockMenuKey === item.key;
+    const showArrival = normalizeSaleType(item.saleType) === "预售";
+    const actionColumns = showArrival ? 4 : 3;
     card.innerHTML = `
       <img class="stock-image" alt="" src="${item.image || ""}">
       <div class="stock-main">
@@ -1448,15 +1450,19 @@ function renderStockList(sourceEntries) {
       <div class="stock-actions">
         <button type="button" class="mini-action add-stock" data-add-stock-key="${escapeHtml(item.key)}">加库存</button>
         <button type="button" class="mini-action sold" data-sell-stock-key="${escapeHtml(item.key)}">卖出</button>
+        ${showArrival ? `<button type="button" class="mini-action arrival" data-arrive-stock-key="${escapeHtml(item.key)}">到货</button>` : ""}
         <button type="button" class="mini-action more" data-stock-more-toggle="${escapeHtml(item.key)}" aria-expanded="${menuOpen ? "true" : "false"}" aria-label="更多操作">⋯</button>
       </div>
       <div class="stock-more-menu ${menuOpen ? "" : "hidden"}" data-stock-more-menu="${escapeHtml(item.key)}">
-        ${normalizeSaleType(item.saleType) === "预售" ? `<button type="button" class="mini-action arrival" data-arrive-stock-key="${escapeHtml(item.key)}">到货</button>` : ""}
         <button type="button" class="mini-action" data-edit-id="${item.latestId}">编辑</button>
         <button type="button" class="mini-action" data-toggle-stock-key="${escapeHtml(item.key)}">${expanded ? "收起明细" : "查看明细"}</button>
       </div>
       ${expanded ? renderStockDetailRows(item.key, sourceEntries) : ""}
     `;
+    const stockActions = card.querySelector(".stock-actions");
+    if (stockActions) {
+      stockActions.style.gridTemplateColumns = `repeat(${actionColumns}, minmax(0, 1fr))`;
+    }
     elements.stockList.append(card);
   });
 }
