@@ -3,7 +3,7 @@ const ACCOUNTS_KEY = "box-machine-account-names";
 const ACTIVE_ACCOUNT_KEY = "box-machine-active-account";
 const STYLE_MEMORY_KEY = "box-machine-style-memory";
 const BACKUP_META_KEY = "box-machine-backup-meta";
-const APP_VERSION = "v45";
+const APP_VERSION = "v46";
 const ACCOUNT_COUNT = 6;
 const SALE_TYPES = [
   { name: "现货", color: "#41bca5" },
@@ -1274,7 +1274,7 @@ function renderLedger() {
       const profit = hasSale ? Number(entry.salePrice || 0) - Number(entry.price || 0) : 0;
       row.innerHTML = `
         <img class="ledger-thumb" alt="" src="${entry.productImage || entry.image || ""}">
-        <div>
+        <div class="ledger-main">
           <h3>${escapeHtml(entry.styleName || entry.productName || "未命名商品")}</h3>
           <p>${entry.styleName && entry.productName ? `${escapeHtml(entry.productName)} · ` : ""}${formatDateTime(entry.purchaseTime)} · ${safeQuantity(entry.quantity)} 件</p>
           <div class="tag-line">
@@ -1282,11 +1282,13 @@ function renderLedger() {
             <span class="ledger-tag">${escapeHtml(accountName(entry.accountId))}</span>
             <span class="ledger-tag ${hasSale ? "sold" : ""}">${hasSale ? `已售 ${formatMoney(entry.salePrice)} · 利润 ${formatMoney(profit)}` : "未售"}</span>
           </div>
-        </div>
-        <div class="ledger-side">
-          <strong class="ledger-amount">${formatMoney(entry.price)}</strong>
-          <button type="button" class="mini-action" data-edit-id="${entry.id}">编辑</button>
-          <button type="button" class="mini-action danger-mini" data-delete-id="${entry.id}">删除</button>
+          <div class="ledger-footer">
+            <strong class="ledger-amount">${formatMoney(entry.price)}</strong>
+            <div class="ledger-actions">
+              <button type="button" class="mini-action" data-edit-id="${entry.id}">编辑</button>
+              <button type="button" class="mini-action danger-mini" data-delete-id="${entry.id}">删除</button>
+            </div>
+          </div>
         </div>
       `;
       elements.ledgerList.append(row);
@@ -1518,16 +1520,19 @@ function renderStats(accountEntries) {
     row.className = "ledger-entry";
     row.innerHTML = `
       <img class="ledger-thumb" alt="" src="${entry.productImage || entry.image || ""}">
-      <div>
+      <div class="ledger-main">
         <h3>${escapeHtml(entry.styleName || entry.productName || "未命名商品")}</h3>
         <p>${formatDateTime(entry.saleTime)} · ${safeQuantity(entry.quantity)} 件</p>
         <div class="tag-line">
           <span class="ledger-tag sold">卖出 ${formatMoney(entry.salePrice)}</span>
           <span class="ledger-tag">利润 ${formatMoney(profitValue)}</span>
         </div>
-      </div>
-      <div class="ledger-side">
-        <button type="button" class="mini-action" data-edit-id="${entry.id}">编辑</button>
+        <div class="ledger-footer compact">
+          <strong class="ledger-amount">${formatMoney(entry.price)}</strong>
+          <div class="ledger-actions">
+            <button type="button" class="mini-action" data-edit-id="${entry.id}">编辑</button>
+          </div>
+        </div>
       </div>
     `;
     elements.soldList.append(row);
@@ -1560,16 +1565,19 @@ function renderSoldHistory(accountEntries) {
     row.className = "ledger-entry";
     row.innerHTML = `
       <img class="ledger-thumb" alt="" src="${entry.productImage || entry.image || ""}">
-      <div>
+      <div class="ledger-main">
         <h3>${escapeHtml(entry.styleName || entry.productName || "未命名商品")}</h3>
         <p>${formatDateTime(entry.saleTime)} · ${safeQuantity(entry.quantity)} 件</p>
         <div class="tag-line">
           <span class="ledger-tag sold">卖出 ${formatMoney(entry.salePrice)}</span>
           <span class="ledger-tag">利润 ${formatMoney(profitValue)}</span>
         </div>
-      </div>
-      <div class="ledger-side">
-        <button type="button" class="mini-action" data-edit-id="${entry.id}">编辑</button>
+        <div class="ledger-footer compact">
+          <strong class="ledger-amount">${formatMoney(entry.price)}</strong>
+          <div class="ledger-actions">
+            <button type="button" class="mini-action" data-edit-id="${entry.id}">编辑</button>
+          </div>
+        </div>
       </div>
     `;
     elements.soldHistoryList.append(row);
